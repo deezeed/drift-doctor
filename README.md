@@ -1,5 +1,7 @@
 # drift-doctor
 
+[![CI](https://github.com/deezeed/drift-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/deezeed/drift-doctor/actions/workflows/ci.yml)
+
 CLI data drift watchdog with AI diagnosis. Monitors tabular datasets for schema and distribution changes between a reference snapshot and new incoming data, then uses the Anthropic API to explain what changed, why it likely happened, and which downstream consumers are at risk.
 
 ```
