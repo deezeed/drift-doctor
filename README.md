@@ -19,9 +19,16 @@ Row count: 1,000 -> 1,000 (+0, +0.0%)  (snapshot: 20260601T140029Z)
 
 ## Install
 
+**Recommended — via pipx** (handles PATH automatically):
 ```bash
-pip install -e .
+pipx install git+https://github.com/deezeed/drift-doctor.git
 ```
+
+**Alternative — via pip:**
+```bash
+pip install git+https://github.com/deezeed/drift-doctor.git
+```
+> On Windows, if `drift-doctor` is not found after `pip install`, add Python's Scripts directory to your PATH or run `py -m drift_doctor.cli` instead.
 
 Requires Python 3.10+. For AI diagnosis, set `ANTHROPIC_API_KEY` in your environment.
 
