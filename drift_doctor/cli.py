@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import json
+import sys
+from enum import Enum
 from pathlib import Path
 
 import pandas as pd
 import typer
 from rich.console import Console
+
+
+class OutputFormat(str, Enum):
+    table = "table"
+    json = "json"
 
 from .detector import detect_drift
 from .profiler import profile_dataframe
@@ -26,7 +34,6 @@ def _load_snapshot(data_path: str, ref_override: str) -> dict:
         p = Path(ref_override)
         if not p.exists():
             raise FileNotFoundError(f"Snapshot not found: {ref_override}")
-        import json
         return json.loads(p.read_text(encoding="utf-8"))
     return load_latest_snapshot(data_path)
 
@@ -72,6 +79,10 @@ def check(
         "", "--skip", "-s",
         help="Comma-separated column names to exclude from drift detection (e.g. id,created_at)",
     ),
+    format: OutputFormat = typer.Option(
+        OutputFormat.table, "--format", "-f",
+        help="Output format: table (default) or json",
+    ),
 ) -> None:
     """Compare current dataset against the latest snapshot and report drift."""
     try:
@@ -82,12 +93,37 @@ def check(
 
     df = _load(path)
     findings = detect_drift(snap["profile"], df, skip_columns=_parse_skip(skip))
-    render_drift_report(
-        findings,
-        snap["profile"]["row_count"],
-        len(df),
-        snapshot_date=snap.get("created_at", ""),
-    )
+
+    if format == OutputFormat.json:
+        ref_rows = snap["profile"]["row_count"]
+        cur_rows = len(df)
+        output = {
+            "snapshot_date": snap.get("created_at", ""),
+            "row_count": {"reference": ref_rows, "current": cur_rows, "delta": cur_rows - ref_rows},
+            "summary": {
+                "critical": sum(1 for f in findings if f.severity.value == "critical"),
+                "warn": sum(1 for f in findings if f.severity.value == "warn"),
+                "total": len(findings),
+            },
+            "findings": [
+                {
+                    "column": f.column,
+                    "metric": f.metric,
+                    "severity": f.severity.value,
+                    "detail": f.detail or f.description,
+                    "delta": f.delta,
+                }
+                for f in findings
+            ],
+        }
+        sys.stdout.write(json.dumps(output, indent=2) + "\n")
+    else:
+        render_drift_report(
+            findings,
+            snap["profile"]["row_count"],
+            len(df),
+            snapshot_date=snap.get("created_at", ""),
+        )
 
     raise typer.Exit(1 if findings else 0)
 
