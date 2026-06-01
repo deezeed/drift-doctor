@@ -108,7 +108,7 @@ drift-doctor check current.csv --ref .driftdoctor/reference_latest.json --skip c
 drift-doctor diagnose current.csv \
   --ref .driftdoctor/reference_latest.json \
   --skip customer_id \
-  --consumers "reporting,ml-pipeline"
+  --consumers "revenue-dashboard,ml-churn-model,crm-sync"
 ```
 
 The demo dataset has these intentional drift signals:
