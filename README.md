@@ -34,6 +34,23 @@ Requires Python 3.10+. For AI diagnosis, set `ANTHROPIC_API_KEY` in your environ
 
 ## Commands
 
+### `drift-doctor clean <path>`
+
+Delete old snapshots, keeping the N most recent.
+
+```bash
+drift-doctor clean data/customers.csv           # keep last 7 (default)
+drift-doctor clean data/customers.csv --keep 3  # keep last 3
+drift-doctor clean data/customers.csv --dry-run # preview without deleting
+```
+
+| Flag | Description |
+|---|---|
+| `--keep`, `-k` | Number of snapshots to keep (default: 7) |
+| `--dry-run` | Preview deletions without applying them |
+
+---
+
 ### `drift-doctor snapshots <path>`
 
 List available snapshots for a dataset — useful before using `--ref` or `--since`.

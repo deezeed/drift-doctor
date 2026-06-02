@@ -227,6 +227,61 @@ class TestSnapshots:
         assert "drift-doctor snapshot" in result.output
 
 
+class TestClean:
+    def _make_snapshots(self, tmp_path, count: int):
+        import json as _json
+        from drift_doctor.profiler import profile_dataframe
+        from drift_doctor.snapshot import SNAPSHOT_DIR
+        df = pd.DataFrame({"age": [25, 30, 35]})
+        profile = profile_dataframe(df)
+        snap_dir = tmp_path / SNAPSHOT_DIR
+        snap_dir.mkdir(exist_ok=True)
+        for i in range(count):
+            ts = f"202601{i+1:02d}T120000Z"
+            (snap_dir / f"data_{ts}.json").write_text(
+                _json.dumps({"created_at": ts, "profile": profile}), encoding="utf-8"
+            )
+        (snap_dir / "data_latest.json").write_text(
+            _json.dumps({"created_at": "20260101T120000Z", "profile": profile}), encoding="utf-8"
+        )
+        csv = tmp_path / "data.csv"
+        df.to_csv(csv, index=False)
+        return csv
+
+    def test_clean_deletes_old_keeps_n(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        csv = self._make_snapshots(tmp_path, count=5)
+        result = runner.invoke(app, ["clean", str(csv), "--keep", "2"])
+        assert result.exit_code == 0
+        from drift_doctor.snapshot import SNAPSHOT_DIR
+        snap_dir = tmp_path / SNAPSHOT_DIR
+        versioned = [p for p in snap_dir.glob("data_*Z.json") if not p.stem.endswith("_latest")]
+        assert len(versioned) == 2
+
+    def test_clean_dry_run_does_not_delete(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        csv = self._make_snapshots(tmp_path, count=5)
+        result = runner.invoke(app, ["clean", str(csv), "--keep", "2", "--dry-run"])
+        assert result.exit_code == 0
+        from drift_doctor.snapshot import SNAPSHOT_DIR
+        snap_dir = tmp_path / SNAPSHOT_DIR
+        versioned = [p for p in snap_dir.glob("data_*Z.json") if not p.stem.endswith("_latest")]
+        assert len(versioned) == 5
+
+    def test_clean_nothing_to_delete(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        csv = self._make_snapshots(tmp_path, count=3)
+        result = runner.invoke(app, ["clean", str(csv), "--keep", "7"])
+        assert result.exit_code == 0
+        assert "nothing to delete" in result.output
+
+    def test_clean_keep_zero_exits_1(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        csv = self._make_snapshots(tmp_path, count=2)
+        result = runner.invoke(app, ["clean", str(csv), "--keep", "0"])
+        assert result.exit_code == 1
+
+
 class TestOnboarding:
     def test_no_snapshot_shows_hint(self, tmp_path):
         """When no snapshot exists, output should contain the snapshot command hint."""

@@ -159,6 +159,57 @@ def snapshots(
 
 
 @app.command()
+def clean(
+    path: str = typer.Argument(..., help="Dataset path to clean snapshots for"),
+    keep: int = typer.Option(7, "--keep", "-k", help="Number of most recent snapshots to keep"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be deleted without deleting"),
+) -> None:
+    """Delete old snapshots, keeping the N most recent."""
+    from .snapshot import SNAPSHOT_DIR
+
+    if keep < 1:
+        err.print("--keep must be at least 1")
+        raise typer.Exit(1)
+
+    source_stem = Path(path).stem
+    snap_dir = Path() / SNAPSHOT_DIR
+
+    versioned = sorted(
+        (p for p in snap_dir.glob(f"{source_stem}_*Z.json") if not p.stem.endswith("_latest")),
+        reverse=True,
+    )
+
+    if not versioned:
+        rich_console.print(f"\n[dim]No snapshots found for '{source_stem}' — nothing to clean.[/dim]\n")
+        return
+
+    to_keep = versioned[:keep]
+    to_delete = versioned[keep:]
+
+    if not to_delete:
+        rich_console.print(f"\n[dim]{len(versioned)} snapshot(s) — all within --keep {keep}, nothing to delete.[/dim]\n")
+        return
+
+    action = "[dim]Would delete[/dim]" if dry_run else "[red]Deleting[/red]"
+    for p in to_delete:
+        ts_str = p.stem.rsplit("_", 1)[-1]
+        try:
+            created = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ").strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            created = ts_str
+        rich_console.print(f"  {action}  [dim]{p.name}[/dim]  ({created})")
+        if not dry_run:
+            p.unlink()
+
+    if dry_run:
+        rich_console.print(f"\n  [dim]Dry run — {len(to_delete)} snapshot(s) would be deleted, "
+                           f"{len(to_keep)} kept.  Re-run without --dry-run to apply.[/dim]\n")
+    else:
+        rich_console.print(f"\n  [green]Done.[/green]  [dim]Deleted {len(to_delete)}, "
+                           f"kept {len(to_keep)}.[/dim]\n")
+
+
+@app.command()
 def check(
     path: str = typer.Argument(..., help="Path to current dataset to check for drift"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
