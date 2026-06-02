@@ -298,6 +298,56 @@ class TestOnboarding:
         assert "customers" in result.output
 
 
+class TestDiagnoseOutputFile:
+    def test_diagnose_writes_markdown_file(self, snap_and_csv, tmp_path, monkeypatch):
+        import drift_doctor.diagnose as diag_mod
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        class FakeMessages:
+            def create(self, **kwargs):
+                class FakeMsg:
+                    content = [type("C", (), {"text": "## What changed\nAge mean shifted."})()]
+                return FakeMsg()
+
+        class FakeClient:
+            messages = FakeMessages()
+
+        monkeypatch.setattr(diag_mod.anthropic, "Anthropic", lambda **kw: FakeClient())
+
+        csv_path, snap_path = snap_and_csv
+        out = tmp_path / "diagnosis.md"
+        result = runner.invoke(app, [
+            "diagnose", str(csv_path), "--ref", str(snap_path),
+            "--output-file", str(out),
+        ])
+        assert out.exists()
+        content = out.read_text(encoding="utf-8")
+        assert "# Drift Diagnosis" in content
+        assert "What changed" in content
+
+    def test_diagnose_no_output_file_without_findings(self, tmp_path, monkeypatch):
+        """When no findings, no API call is made and no file written."""
+        import json as _json
+        from drift_doctor.profiler import profile_dataframe
+        from drift_doctor.snapshot import SNAPSHOT_DIR
+
+        df = pd.DataFrame({"age": [25, 30, 35, 40, 45]})
+        profile = profile_dataframe(df)
+        snap_dir = tmp_path / SNAPSHOT_DIR
+        snap_dir.mkdir()
+        snap_path = snap_dir / "clean_latest.json"
+        snap_path.write_text(_json.dumps({"created_at": "2026-01-01", "profile": profile}), encoding="utf-8")
+        csv_path = tmp_path / "clean.csv"
+        df.to_csv(csv_path, index=False)
+
+        out = tmp_path / "diagnosis.md"
+        result = runner.invoke(app, [
+            "diagnose", str(csv_path), "--ref", str(snap_path),
+            "--output-file", str(out),
+        ])
+        assert not out.exists()
+
+
 class TestModelUpgrade:
     def test_diagnose_uses_new_model(self, monkeypatch):
         import drift_doctor.diagnose as diag_mod

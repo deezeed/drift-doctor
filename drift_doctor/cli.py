@@ -324,6 +324,7 @@ def diagnose(
     null_warn: float = typer.Option(0.05, "--null-warn", help="Null-rate delta warn threshold"),
     null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
     notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
+    output_file: str = typer.Option("", "--output-file", "-o", help="Write diagnosis to file (.md or .txt)"),
 ) -> None:
     """Run drift check then get AI-powered root-cause diagnosis via Anthropic API."""
     from .diagnose import run_diagnosis
@@ -366,7 +367,20 @@ def diagnose(
             err.print(f"Notification failed: {exc}")
 
     consumer_list = [c.strip() for c in consumers.split(",") if c.strip()]
-    run_diagnosis(findings, snap["profile"], len(df), consumer_list)
+    diagnosis = run_diagnosis(findings, snap["profile"], len(df), consumer_list)
+
+    if output_file and diagnosis:
+        snap_date = snap.get("created_at", "")
+        n_crit = sum(1 for f in findings if f.severity.value == "critical")
+        n_warn = sum(1 for f in findings if f.severity.value == "warn")
+        header = (
+            f"# Drift Diagnosis — {Path(path).name}\n\n"
+            f"- **Snapshot:** {snap_date}\n"
+            f"- **Findings:** {n_crit} critical, {n_warn} warn\n\n"
+            f"---\n\n"
+        )
+        Path(output_file).write_text(header + diagnosis + "\n", encoding="utf-8")
+        rich_console.print(f"[dim]Diagnosis written: {output_file}[/dim]")
 
 
 @app.command()

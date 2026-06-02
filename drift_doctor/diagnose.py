@@ -66,11 +66,12 @@ def run_diagnosis(
     ref_profile: dict,
     cur_row_count: int,
     consumers: list[str],
-) -> None:
+) -> str | None:
+    """Run AI diagnosis and return the diagnosis text, or None if skipped."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         console.print("\n[red]ANTHROPIC_API_KEY not set — skipping AI diagnosis.[/red]\n")
-        return
+        return None
 
     prompt = _build_prompt(findings, ref_profile, cur_row_count, consumers)
 
@@ -92,3 +93,4 @@ def run_diagnosis(
             padding=(1, 2),
         )
     )
+    return diagnosis

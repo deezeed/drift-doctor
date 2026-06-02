@@ -157,8 +157,10 @@ The AI response covers:
 | Flag | Description |
 |---|---|
 | `--ref`, `-r` | Specific snapshot JSON |
+| `--since` | Use snapshot closest to this age: `7d`, `24h`, `30m` |
 | `--skip`, `-s` | Columns to exclude |
 | `--consumers`, `-c` | Comma-separated downstream consumer names for targeted risk assessment |
+| `--output-file`, `-o` | Write diagnosis to a `.md` or `.txt` file |
 | `--psi-warn` / `--psi-crit` | PSI thresholds |
 | `--js-warn` / `--js-crit` | JS-divergence thresholds |
 | `--null-warn` / `--null-crit` | Null-rate delta thresholds |
