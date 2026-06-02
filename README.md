@@ -12,7 +12,7 @@ Row count: 1,000 -> 1,000 (+0, +0.0%)  (snapshot: 20260601T140029Z)
  ──────────────────────────────────────────────────────
   CRIT    phone    schema   present -> missing
   CRIT    spend    null%    1.6% -> 32.5%  (+30.9%)
-  CRIT    age      PSI      mean 34.3 -> 49.8  (PSI=2.969)
+  CRIT    age      mean_shift   mean 34.3 -> 49.8  (+15.5)
   WARN    email    schema   new column
   WARN    status   JS-div   JS=0.155
 ```
@@ -69,6 +69,30 @@ Exits with code `1` if any findings exist — suitable for CI/CD pipelines.
 |---|---|
 | `--ref`, `-r` | Path to a specific snapshot JSON instead of the auto-detected latest |
 | `--skip`, `-s` | Comma-separated columns to exclude (e.g. ID, timestamp columns) |
+| `--format`, `-f` | Output format: `table` (default) or `json` |
+| `--output-file`, `-o` | Write JSON report to file (implies `--format json`) |
+| `--psi-warn` / `--psi-crit` | PSI thresholds (default: 0.10 / 0.25) |
+| `--js-warn` / `--js-crit` | JS-divergence thresholds (default: 0.10 / 0.30) |
+| `--null-warn` / `--null-crit` | Null-rate delta thresholds (default: 0.05 / 0.15) |
+
+---
+
+### `drift-doctor diff <snapshot_a> <snapshot_b>`
+
+Compare two snapshot files directly — no raw data needed.
+
+```bash
+drift-doctor diff .driftdoctor/customers_20260101T120000Z.json \
+                  .driftdoctor/customers_20260201T120000Z.json
+drift-doctor diff snap_a.json snap_b.json --skip customer_id --format json
+```
+
+Useful for comparing historical snapshots or validating that a re-run produced the same profile.
+
+| Flag | Description |
+|---|---|
+| `--skip`, `-s` | Comma-separated columns to exclude |
+| `--format`, `-f` | Output format: `table` (default) or `json` |
 
 ---
 
@@ -94,6 +118,9 @@ The AI response covers:
 | `--ref`, `-r` | Specific snapshot JSON |
 | `--skip`, `-s` | Columns to exclude |
 | `--consumers`, `-c` | Comma-separated downstream consumer names for targeted risk assessment |
+| `--psi-warn` / `--psi-crit` | PSI thresholds |
+| `--js-warn` / `--js-crit` | JS-divergence thresholds |
+| `--null-warn` / `--null-crit` | Null-rate delta thresholds |
 
 **Privacy guarantee:** raw data rows never leave the machine. Only column names, metric deltas, and severity labels are sent to the API.
 
@@ -116,6 +143,12 @@ drift-doctor diagnose current.csv \
   --ref .driftdoctor/reference_latest.json \
   --skip customer_id \
   --consumers "revenue-dashboard,ml-churn-model,crm-sync"
+
+# Compare two snapshots without raw data
+drift-doctor diff .driftdoctor/reference_latest.json .driftdoctor/current_latest.json --skip customer_id
+
+# Export findings as JSON
+drift-doctor check current.csv --skip customer_id --output-file report.json
 ```
 
 The demo dataset has these intentional drift signals:
