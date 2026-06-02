@@ -81,6 +81,7 @@ def check(
     js_crit: float = typer.Option(0.3, "--js-crit", help="JS-divergence critical threshold"),
     null_warn: float = typer.Option(0.05, "--null-warn", help="Null-rate delta warn threshold"),
     null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
+    notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
 ) -> None:
     """Compare current dataset against the latest snapshot and report drift."""
     try:
@@ -130,6 +131,21 @@ def check(
             snapshot_date=snap.get("created_at", ""),
         )
 
+    if notify and findings:
+        from .notifier import notify as _notify
+        from .api import DriftResult
+        from .detector import Severity
+        result = DriftResult(
+            findings=findings,
+            ref_row_count=snap["profile"]["row_count"],
+            cur_row_count=len(df),
+        )
+        try:
+            _notify(result, notify, source=path)
+            rich_console.print(f"[dim]Notification sent to {notify}[/dim]")
+        except Exception as exc:
+            err.print(f"Notification failed: {exc}")
+
     raise typer.Exit(1 if findings else 0)
 
 
@@ -145,6 +161,7 @@ def diagnose(
     js_crit: float = typer.Option(0.3, "--js-crit", help="JS-divergence critical threshold"),
     null_warn: float = typer.Option(0.05, "--null-warn", help="Null-rate delta warn threshold"),
     null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
+    notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
 ) -> None:
     """Run drift check then get AI-powered root-cause diagnosis via Anthropic API."""
     from .diagnose import run_diagnosis
@@ -173,6 +190,16 @@ def diagnose(
     if not findings:
         rich_console.print("\n[dim]No drift found — skipping AI diagnosis.[/dim]\n")
         return
+
+    if notify:
+        from .notifier import notify as _notify
+        from .api import DriftResult
+        result = DriftResult(findings=findings, ref_row_count=snap["profile"]["row_count"], cur_row_count=len(df))
+        try:
+            _notify(result, notify, source=path)
+            rich_console.print(f"[dim]Notification sent to {notify}[/dim]")
+        except Exception as exc:
+            err.print(f"Notification failed: {exc}")
 
     consumer_list = [c.strip() for c in consumers.split(",") if c.strip()]
     run_diagnosis(findings, snap["profile"], len(df), consumer_list)

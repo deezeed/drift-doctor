@@ -63,6 +63,16 @@ class DriftResult:
                 f"Critical drift detected in {len(self.critical)} column(s): {cols}"
             )
 
+    def notify(self, webhook_url: str, source: str = "") -> None:
+        """Send findings to a Slack or generic webhook URL.
+
+        No-op when there are no findings. Slack webhooks
+        (hooks.slack.com) receive a Block Kit payload; all other URLs
+        receive a plain JSON report.
+        """
+        from .notifier import notify as _notify
+        _notify(self, webhook_url, source=source)
+
 
 def snapshot(path: str | Path) -> dict:
     """Profile a dataset and save a reference snapshot to .driftdoctor/.

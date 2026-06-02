@@ -71,6 +71,7 @@ Exits with code `1` if any findings exist — suitable for CI/CD pipelines.
 | `--skip`, `-s` | Comma-separated columns to exclude (e.g. ID, timestamp columns) |
 | `--format`, `-f` | Output format: `table` (default) or `json` |
 | `--output-file`, `-o` | Write JSON report to file (implies `--format json`) |
+| `--notify`, `-n` | Webhook URL to POST findings — Slack or generic (sent only when findings exist) |
 | `--psi-warn` / `--psi-crit` | PSI thresholds (default: 0.10 / 0.25) |
 | `--js-warn` / `--js-crit` | JS-divergence thresholds (default: 0.10 / 0.30) |
 | `--null-warn` / `--null-crit` | Null-rate delta thresholds (default: 0.05 / 0.15) |
@@ -183,6 +184,12 @@ print(result.findings[0].detail) # "mean 34.3 -> 49.8  (+15.5)"
 # Raise in a pipeline if critical drift is found
 result.raise_on_critical()
 
+# Send Slack alert (only fires when findings exist)
+result.notify("https://hooks.slack.com/services/T.../B.../xxx", source="customers.csv")
+
+# Generic webhook — n8n, Zapier, Teams, custom endpoint
+result.notify("https://my-endpoint.example.com/hook")
+
 # Use a specific snapshot file
 result = check_drift("data/customers.csv",
                      ref="data/.driftdoctor/customers_20260101T120000Z.json",
@@ -202,6 +209,7 @@ result = diff_snapshots("snap_jan.json", "snap_feb.json")
 | `has_drift` | `bool` | True if any findings exist |
 | `summary` | `dict` | `{"critical": N, "warn": N, "total": N}` |
 | `raise_on_critical()` | — | Raises `RuntimeError` if critical findings exist |
+| `notify(url, source="")` | — | POST findings to Slack or generic webhook (no-op if no findings) |
 
 ## Supported formats
 
