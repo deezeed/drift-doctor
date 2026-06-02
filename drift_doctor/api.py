@@ -63,6 +63,11 @@ class DriftResult:
                 f"Critical drift detected in {len(self.critical)} column(s): {cols}"
             )
 
+    def to_html(self, source: str = "") -> str:
+        """Return a complete HTML report string."""
+        from .reporter_html import render_html
+        return render_html(self, source=source)
+
     def notify(self, webhook_url: str, source: str = "") -> None:
         """Send findings to a Slack or generic webhook URL.
 

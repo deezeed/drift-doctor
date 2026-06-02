@@ -99,8 +99,22 @@ def check(
         null_warn=null_warn, null_crit=null_crit,
     )
 
-    use_json = format == OutputFormat.json or bool(output_file)
-    if use_json:
+    use_html = output_file and Path(output_file).suffix.lower() == ".html"
+    use_json = not use_html and (format == OutputFormat.json or bool(output_file))
+
+    if use_html:
+        from .api import DriftResult
+        result = DriftResult(
+            findings=findings,
+            ref_row_count=snap["profile"]["row_count"],
+            cur_row_count=len(df),
+            snapshot_date=snap.get("created_at", ""),
+        )
+        Path(output_file).write_text(result.to_html(source=path), encoding="utf-8")
+        rich_console.print(f"[dim]Report written: {output_file}[/dim]")
+        render_drift_report(findings, snap["profile"]["row_count"], len(df),
+                            snapshot_date=snap.get("created_at", ""))
+    elif use_json:
         ref_rows = snap["profile"]["row_count"]
         cur_rows = len(df)
         report = {

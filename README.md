@@ -72,6 +72,7 @@ Exits with code `1` if any findings exist — suitable for CI/CD pipelines.
 | `--format`, `-f` | Output format: `table` (default) or `json` |
 | `--output-file`, `-o` | Write JSON report to file (implies `--format json`) |
 | `--notify`, `-n` | Webhook URL to POST findings — Slack or generic (sent only when findings exist) |
+| `--output-file report.html` | Write HTML report (auto-detected by `.html` extension) |
 | `--psi-warn` / `--psi-crit` | PSI thresholds (default: 0.10 / 0.25) |
 | `--js-warn` / `--js-crit` | JS-divergence thresholds (default: 0.10 / 0.30) |
 | `--null-warn` / `--null-crit` | Null-rate delta thresholds (default: 0.05 / 0.15) |
@@ -210,6 +211,7 @@ result = diff_snapshots("snap_jan.json", "snap_feb.json")
 | `summary` | `dict` | `{"critical": N, "warn": N, "total": N}` |
 | `raise_on_critical()` | — | Raises `RuntimeError` if critical findings exist |
 | `notify(url, source="")` | — | POST findings to Slack or generic webhook (no-op if no findings) |
+| `to_html(source="")` | `str` | Generate a standalone HTML report |
 
 ## Supported formats
 
