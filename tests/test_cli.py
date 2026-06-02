@@ -118,6 +118,7 @@ class TestFailOn:
 class TestModelUpgrade:
     def test_diagnose_uses_new_model(self, monkeypatch):
         import drift_doctor.diagnose as diag_mod
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         captured = {}
 
         class FakeMessages:
