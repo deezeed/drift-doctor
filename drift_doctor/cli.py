@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -115,6 +116,49 @@ def snapshot(
 
 
 @app.command()
+def snapshots(
+    path: str = typer.Argument(..., help="Dataset path to list snapshots for"),
+) -> None:
+    """List available snapshots for a dataset."""
+    from rich.table import Table
+    from .snapshot import SNAPSHOT_DIR
+
+    source_stem = Path(path).stem
+    snap_dir = Path() / SNAPSHOT_DIR
+
+    versioned = sorted(
+        (p for p in snap_dir.glob(f"{source_stem}_*Z.json") if not p.stem.endswith("_latest")),
+        reverse=True,
+    )
+
+    if not versioned:
+        rich_console.print(f"\n[dim]No snapshots found for '{source_stem}' in {snap_dir}[/dim]")
+        rich_console.print(f"  Run: [bold cyan]drift-doctor snapshot {path}[/bold cyan]\n")
+        raise typer.Exit(1)
+
+    table = Table(show_header=True, header_style="bold dim", box=None, padding=(0, 2))
+    table.add_column("File", style="cyan")
+    table.add_column("Created (UTC)")
+    table.add_column("Size", justify="right", style="dim")
+
+    for p in versioned:
+        ts_str = p.stem.rsplit("_", 1)[-1]
+        try:
+            created = datetime.strptime(ts_str, "%Y%m%dT%H%M%SZ").strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            created = ts_str
+        size_bytes = p.stat().st_size
+        size = f"{size_bytes // 1024} KB" if size_bytes >= 1024 else f"{size_bytes} B"
+        table.add_row(p.name, created, size)
+
+    rich_console.print(f"\n[bold]Snapshots for[/bold] [cyan]{source_stem}[/cyan]  "
+                       f"[dim]({snap_dir})[/dim]")
+    rich_console.print(table)
+    rich_console.print(f"\n  [dim]{len(versioned)} snapshot(s).  "
+                       f"Use --ref or --since to select one.[/dim]\n")
+
+
+@app.command()
 def check(
     path: str = typer.Argument(..., help="Path to current dataset to check for drift"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
@@ -130,6 +174,7 @@ def check(
     null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
     notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
     fail_on: FailOn = typer.Option(FailOn.critical, "--fail-on", help="Exit 1 on: 'critical' (default) or 'any' findings"),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output; use exit code only"),
 ) -> None:
     """Compare current dataset against the latest snapshot and report drift."""
     try:
@@ -152,21 +197,23 @@ def check(
     use_html = output_file and Path(output_file).suffix.lower() == ".html"
     use_json = not use_html and (format == OutputFormat.json or bool(output_file))
 
+    ref_rows = snap["profile"]["row_count"]
+    cur_rows = len(df)
+
     if use_html:
         from .api import DriftResult
         result = DriftResult(
             findings=findings,
-            ref_row_count=snap["profile"]["row_count"],
-            cur_row_count=len(df),
+            ref_row_count=ref_rows,
+            cur_row_count=cur_rows,
             snapshot_date=snap.get("created_at", ""),
         )
         Path(output_file).write_text(result.to_html(source=path), encoding="utf-8")
-        rich_console.print(f"[dim]Report written: {output_file}[/dim]")
-        render_drift_report(findings, snap["profile"]["row_count"], len(df),
-                            snapshot_date=snap.get("created_at", ""))
+        if not quiet:
+            rich_console.print(f"[dim]Report written: {output_file}[/dim]")
+            render_drift_report(findings, ref_rows, cur_rows,
+                                snapshot_date=snap.get("created_at", ""))
     elif use_json:
-        ref_rows = snap["profile"]["row_count"]
-        cur_rows = len(df)
         report = {
             "snapshot_date": snap.get("created_at", ""),
             "row_count": {"reference": ref_rows, "current": cur_rows, "delta": cur_rows - ref_rows},
@@ -184,21 +231,17 @@ def check(
         report_str = json.dumps(report, indent=2) + "\n"
         if output_file:
             Path(output_file).write_text(report_str, encoding="utf-8")
-            rich_console.print(f"[dim]Report written: {output_file}[/dim]")
-        else:
+            if not quiet:
+                rich_console.print(f"[dim]Report written: {output_file}[/dim]")
+        elif not quiet:
             sys.stdout.write(report_str)
-    else:
-        render_drift_report(
-            findings,
-            snap["profile"]["row_count"],
-            len(df),
-            snapshot_date=snap.get("created_at", ""),
-        )
+    elif not quiet:
+        render_drift_report(findings, ref_rows, cur_rows,
+                            snapshot_date=snap.get("created_at", ""))
 
     if notify and findings:
         from .notifier import notify as _notify
         from .api import DriftResult
-        from .detector import Severity
         result = DriftResult(
             findings=findings,
             ref_row_count=snap["profile"]["row_count"],
@@ -206,7 +249,8 @@ def check(
         )
         try:
             _notify(result, notify, source=path)
-            rich_console.print(f"[dim]Notification sent to {notify}[/dim]")
+            if not quiet:
+                rich_console.print(f"[dim]Notification sent to {notify}[/dim]")
         except Exception as exc:
             err.print(f"Notification failed: {exc}")
 

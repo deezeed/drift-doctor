@@ -34,6 +34,25 @@ Requires Python 3.10+. For AI diagnosis, set `ANTHROPIC_API_KEY` in your environ
 
 ## Commands
 
+### `drift-doctor snapshots <path>`
+
+List available snapshots for a dataset — useful before using `--ref` or `--since`.
+
+```bash
+drift-doctor snapshots data/customers.csv
+```
+
+```
+Snapshots for customers  (.driftdoctor)
+  File                                  Created (UTC)          Size
+  customers_20260601T140029Z.json       2026-06-01 14:00:29    12 KB
+  customers_20260525T090000Z.json       2026-05-25 09:00:00    11 KB
+
+  2 snapshot(s).  Use --ref or --since to select one.
+```
+
+---
+
 ### `drift-doctor snapshot <path>`
 
 Profile a dataset and save a reference snapshot to `.driftdoctor/`.
@@ -74,6 +93,7 @@ Exits with code `1` when critical findings exist (default). Control this with `-
 | `--notify`, `-n` | Webhook URL to POST findings — Slack or generic (sent only when findings exist) |
 | `--output-file report.html` | Write HTML report (auto-detected by `.html` extension) |
 | `--since` | Use snapshot closest to this age: `7d`, `24h`, `30m` |
+| `--quiet`, `-q` | Suppress all output; use exit code only |
 | `--fail-on` | Exit 1 on: `critical` (default) or `any` findings |
 | `--psi-warn` / `--psi-crit` | PSI thresholds (default: 0.10 / 0.25) |
 | `--js-warn` / `--js-crit` | JS-divergence thresholds (default: 0.10 / 0.30) |

@@ -170,6 +170,63 @@ class TestSince:
         assert result.exit_code != 0
 
 
+class TestQuiet:
+    def test_quiet_suppresses_output(self, snap_and_csv, monkeypatch):
+        from drift_doctor import cli as cli_mod
+        from drift_doctor.detector import DriftFinding, Severity
+        crit_finding = DriftFinding(
+            column="age", metric="psi", severity=Severity.CRITICAL,
+            reference_value=35.0, current_value=80.0, delta=45.0,
+            description="PSI critical", detail="PSI=3.0",
+        )
+        monkeypatch.setattr(cli_mod, "detect_drift", lambda *a, **kw: [crit_finding])
+        csv_path, snap_path = snap_and_csv
+        result = runner.invoke(app, ["check", str(csv_path), "--ref", str(snap_path), "--quiet"])
+        assert result.exit_code == 1
+        assert result.output.strip() == ""
+
+    def test_quiet_still_writes_output_file(self, snap_and_csv, tmp_path, monkeypatch):
+        from drift_doctor import cli as cli_mod
+        from drift_doctor.detector import DriftFinding, Severity
+        crit_finding = DriftFinding(
+            column="age", metric="psi", severity=Severity.CRITICAL,
+            reference_value=35.0, current_value=80.0, delta=45.0,
+            description="PSI critical", detail="PSI=3.0",
+        )
+        monkeypatch.setattr(cli_mod, "detect_drift", lambda *a, **kw: [crit_finding])
+        csv_path, snap_path = snap_and_csv
+        out = tmp_path / "report.json"
+        result = runner.invoke(app, [
+            "check", str(csv_path), "--ref", str(snap_path),
+            "--quiet", "--output-file", str(out),
+        ])
+        assert result.exit_code == 1
+        assert result.output.strip() == ""
+        assert out.exists()
+
+
+class TestSnapshots:
+    def test_snapshots_lists_files(self, snap_and_csv, monkeypatch):
+        import json as _json
+        csv_path, snap_path = snap_and_csv
+        tmp_path = snap_path.parent.parent
+        monkeypatch.chdir(tmp_path)
+        # snapshots command requires versioned files (not _latest); add one
+        versioned = snap_path.parent / "current_20260101T120000Z.json"
+        versioned.write_text(snap_path.read_text(encoding="utf-8"), encoding="utf-8")
+        result = runner.invoke(app, ["snapshots", str(csv_path)])
+        assert result.exit_code == 0
+        assert "current" in result.output
+
+    def test_snapshots_no_snapshot_exits_1(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        csv_path = tmp_path / "ghost.csv"
+        pd.DataFrame({"x": [1]}).to_csv(csv_path, index=False)
+        result = runner.invoke(app, ["snapshots", str(csv_path)])
+        assert result.exit_code == 1
+        assert "drift-doctor snapshot" in result.output
+
+
 class TestOnboarding:
     def test_no_snapshot_shows_hint(self, tmp_path):
         """When no snapshot exists, output should contain the snapshot command hint."""
