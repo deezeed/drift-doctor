@@ -115,6 +115,22 @@ class TestFailOn:
         assert result.exit_code == 0
 
 
+class TestOnboarding:
+    def test_no_snapshot_shows_hint(self, tmp_path):
+        """When no snapshot exists, output should contain the snapshot command hint."""
+        csv_path = tmp_path / "mydata.csv"
+        pd.DataFrame({"x": [1, 2, 3]}).to_csv(csv_path, index=False)
+        result = runner.invoke(app, ["check", str(csv_path)])
+        assert result.exit_code == 1
+        assert "drift-doctor snapshot" in result.output
+
+    def test_no_snapshot_mentions_filename(self, tmp_path):
+        csv_path = tmp_path / "customers.csv"
+        pd.DataFrame({"x": [1, 2, 3]}).to_csv(csv_path, index=False)
+        result = runner.invoke(app, ["check", str(csv_path)])
+        assert "customers" in result.output
+
+
 class TestModelUpgrade:
     def test_diagnose_uses_new_model(self, monkeypatch):
         import drift_doctor.diagnose as diag_mod

@@ -23,7 +23,7 @@ from .detector import detect_drift, diff_profiles
 from .profiler import profile_dataframe
 from .reporter import console as rich_console
 from .reporter import render_drift_report, render_snapshot_summary
-from .snapshot import load_latest_snapshot, save_snapshot
+from .snapshot import NoSnapshotError, load_latest_snapshot, save_snapshot
 
 app = typer.Typer(
     name="drift-doctor",
@@ -32,6 +32,13 @@ app = typer.Typer(
     pretty_exceptions_show_locals=False,
 )
 err = Console(stderr=True, style="bold red", legacy_windows=False)
+
+
+def _no_snapshot_exit(source_path: str) -> None:
+    name = Path(source_path).name
+    rich_console.print(f"\n[red]No snapshot found for[/red] [bold]{name}[/bold]")
+    rich_console.print(f"  [dim]Create one first:[/dim] [bold cyan]drift-doctor snapshot {source_path}[/bold cyan]\n")
+    raise typer.Exit(1)
 
 
 def _load_snapshot(data_path: str, ref_override: str) -> dict:
@@ -92,6 +99,8 @@ def check(
     """Compare current dataset against the latest snapshot and report drift."""
     try:
         snap = _load_snapshot(path, ref)
+    except NoSnapshotError:
+        _no_snapshot_exit(path)
     except FileNotFoundError as exc:
         err.print(str(exc))
         raise typer.Exit(1)
@@ -190,6 +199,8 @@ def diagnose(
 
     try:
         snap = _load_snapshot(path, ref)
+    except NoSnapshotError:
+        _no_snapshot_exit(path)
     except FileNotFoundError as exc:
         err.print(str(exc))
         raise typer.Exit(1)
@@ -332,6 +343,8 @@ def watch(
 
             try:
                 snap = _load_snapshot(path, ref)
+            except NoSnapshotError:
+                _no_snapshot_exit(path)
             except FileNotFoundError as exc:
                 err.print(str(exc))
                 raise typer.Exit(1)

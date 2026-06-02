@@ -7,6 +7,13 @@ from pathlib import Path
 SNAPSHOT_DIR = ".driftdoctor"
 
 
+class NoSnapshotError(FileNotFoundError):
+    """Raised when no reference snapshot exists for a dataset."""
+    def __init__(self, source_path: str):
+        self.source_path = source_path
+        super().__init__(f"No snapshot found for '{Path(source_path).stem}'.")
+
+
 def save_snapshot(profile: dict, source_path: str, base_dir: Path | None = None) -> Path:
     snapshot_dir = (base_dir or Path()) / SNAPSHOT_DIR
     snapshot_dir.mkdir(exist_ok=True)
@@ -35,9 +42,6 @@ def load_latest_snapshot(source_path: str, base_dir: Path | None = None) -> dict
     latest_path = (base_dir or Path()) / SNAPSHOT_DIR / f"{source_stem}_latest.json"
 
     if not latest_path.exists():
-        raise FileNotFoundError(
-            f"No snapshot found for '{source_stem}'. "
-            f"Run `drift-doctor snapshot {source_path}` first."
-        )
+        raise NoSnapshotError(source_path)
 
     return json.loads(latest_path.read_text(encoding="utf-8"))
