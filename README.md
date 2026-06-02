@@ -149,8 +149,12 @@ drift-doctor diagnose current.csv \
 # Compare two snapshots without raw data
 drift-doctor diff .driftdoctor/reference_latest.json .driftdoctor/current_latest.json --skip customer_id
 
-# Export findings as JSON
+# Export findings as JSON or HTML
 drift-doctor check current.csv --skip customer_id --output-file report.json
+drift-doctor check current.csv --skip customer_id --output-file report.html
+
+# Continuous monitoring — check every 30 seconds
+drift-doctor watch current.csv --interval 30s --skip customer_id
 ```
 
 The demo dataset has these intentional drift signals:
@@ -162,6 +166,50 @@ The demo dataset has these intentional drift signals:
 | `age` | mean shifted 35 → 50 (PSI ~3.0) |
 | `spend` | null rate 1.6% → 32.5% |
 | `status` | churned share 10% → 60% |
+
+## Continuous monitoring
+
+### `drift-doctor watch <path>`
+
+Check a dataset repeatedly at a fixed interval. Runs immediately, then waits.
+
+```bash
+# Check every hour, alert on Slack when drift is found
+drift-doctor watch data/customers.csv --interval 1h --notify https://hooks.slack.com/...
+
+# Check every 5 minutes, skip ID columns
+drift-doctor watch data/customers.csv --interval 5m --skip customer_id,created_at
+```
+
+Supports `s` (seconds), `m` (minutes), `h` (hours). Press Ctrl+C to stop.
+
+---
+
+### GitHub Actions data quality gate
+
+Fail CI when a PR introduces data drift. The HTML report is uploaded as an artifact.
+
+```yaml
+- name: Install drift-doctor
+  run: pip install drift-doctor
+
+- name: Check for drift
+  run: |
+    drift-doctor check data/customers.csv \
+      --skip customer_id,created_at \
+      --output-file drift-report.html
+
+- name: Upload drift report
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: drift-report
+    path: drift-report.html
+```
+
+A full example workflow is at [`.github/workflows/data-quality.yml.example`](.github/workflows/data-quality.yml.example).
+
+---
 
 ## Python API
 

@@ -1,0 +1,50 @@
+# Example: use drift-doctor as a data quality gate in CI.
+# Copy to .github/workflows/data-quality.yml and adapt to your repo.
+#
+# Workflow:
+#   1. Snapshot runs on the reference branch (e.g. main) to save a baseline.
+#   2. Check runs on every PR / scheduled job against the latest snapshot.
+#   3. The HTML report is uploaded as a CI artifact (downloadable from the Actions tab).
+#   4. The job exits 1 if drift is found — failing the pipeline.
+
+name: Data Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - "data/**"          # trigger only when data files change
+  schedule:
+    - cron: "0 6 * * *"   # daily at 06:00 UTC
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install drift-doctor
+        run: pip install drift-doctor
+
+      # On main: save a reference snapshot (commit .driftdoctor/ or cache it)
+      - name: Save reference snapshot
+        if: github.ref == 'refs/heads/main'
+        run: drift-doctor snapshot data/customers.csv
+
+      # On PRs / schedule: check for drift and generate HTML report
+      - name: Check for drift
+        run: |
+          drift-doctor check data/customers.csv \
+            --skip customer_id,created_at \
+            --output-file drift-report.html
+
+      - name: Upload drift report
+        if: always()   # upload even when the check fails
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift-report.html

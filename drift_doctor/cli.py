@@ -275,6 +275,93 @@ def diff(
     raise typer.Exit(1 if findings else 0)
 
 
+def _parse_interval(s: str) -> int:
+    """Parse '30s', '5m', '1h' -> seconds."""
+    s = s.strip().lower()
+    if s.endswith("h"):
+        return int(s[:-1]) * 3600
+    if s.endswith("m"):
+        return int(s[:-1]) * 60
+    if s.endswith("s"):
+        return int(s[:-1])
+    return int(s)
+
+
+@app.command()
+def watch(
+    path: str = typer.Argument(..., help="Path to dataset to monitor"),
+    interval: str = typer.Option("1h", "--interval", "-i", help="Check interval: 30s, 5m, 1h"),
+    ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
+    skip: str = typer.Option("", "--skip", "-s", help="Comma-separated columns to exclude"),
+    notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings"),
+    psi_warn: float = typer.Option(0.1, "--psi-warn"),
+    psi_crit: float = typer.Option(0.25, "--psi-crit"),
+    js_warn: float = typer.Option(0.1, "--js-warn"),
+    js_crit: float = typer.Option(0.3, "--js-crit"),
+    null_warn: float = typer.Option(0.05, "--null-warn"),
+    null_crit: float = typer.Option(0.15, "--null-crit"),
+) -> None:
+    """Repeatedly check a dataset for drift at a fixed interval. Press Ctrl+C to stop."""
+    import time
+    from datetime import datetime, timezone
+
+    try:
+        interval_sec = _parse_interval(interval)
+    except ValueError:
+        err.print(f"Invalid interval '{interval}'. Use e.g. 30s, 5m, 1h.")
+        raise typer.Exit(1)
+
+    rich_console.print(f"\n[bold]Watching[/bold] [cyan]{path}[/cyan]  "
+                       f"[dim]every {interval}[/dim]  —  Ctrl+C to stop\n")
+
+    try:
+        while True:
+            ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+            rich_console.print(f"[dim]\\[{ts}][/dim] Checking...")
+
+            try:
+                snap = _load_snapshot(path, ref)
+            except FileNotFoundError as exc:
+                err.print(str(exc))
+                raise typer.Exit(1)
+
+            df = _load(path)
+            findings = detect_drift(
+                snap["profile"], df,
+                skip_columns=_parse_skip(skip),
+                psi_warn=psi_warn, psi_crit=psi_crit,
+                js_warn=js_warn, js_crit=js_crit,
+                null_warn=null_warn, null_crit=null_crit,
+            )
+
+            if findings:
+                render_drift_report(findings, snap["profile"]["row_count"], len(df),
+                                    snapshot_date=snap.get("created_at", ""))
+                if notify:
+                    from .notifier import notify as _notify
+                    from .api import DriftResult
+                    result = DriftResult(findings=findings,
+                                        ref_row_count=snap["profile"]["row_count"],
+                                        cur_row_count=len(df))
+                    try:
+                        _notify(result, notify, source=path)
+                        rich_console.print("[dim]Notification sent.[/dim]")
+                    except Exception as exc:
+                        err.print(f"Notification failed: {exc}")
+            else:
+                crit = sum(1 for f in findings if f.severity.value == "critical")
+                rich_console.print(f"  [green]No drift detected.[/green]")
+
+            next_ts = datetime.now(timezone.utc).fromtimestamp(
+                time.time() + interval_sec, tz=timezone.utc
+            ).strftime("%H:%M:%S")
+            rich_console.print(f"  [dim]Next check at {next_ts} UTC[/dim]\n")
+            time.sleep(interval_sec)
+
+    except KeyboardInterrupt:
+        rich_console.print("\n[dim]Watch stopped.[/dim]\n")
+
+
 def main() -> None:
     import sys
     if sys.platform == "win32":
