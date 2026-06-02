@@ -1,1 +1,5 @@
-__version__ = "0.3.0"
+__version__ = "0.4.0"
+
+from .api import DriftResult, check_drift, diff_snapshots, snapshot
+
+__all__ = ["snapshot", "check_drift", "diff_snapshots", "DriftResult"]

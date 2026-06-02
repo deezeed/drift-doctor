@@ -7,8 +7,8 @@ from pathlib import Path
 SNAPSHOT_DIR = ".driftdoctor"
 
 
-def save_snapshot(profile: dict, source_path: str) -> Path:
-    snapshot_dir = Path(SNAPSHOT_DIR)
+def save_snapshot(profile: dict, source_path: str, base_dir: Path | None = None) -> Path:
+    snapshot_dir = (base_dir or Path()) / SNAPSHOT_DIR
     snapshot_dir.mkdir(exist_ok=True)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -30,9 +30,9 @@ def save_snapshot(profile: dict, source_path: str) -> Path:
     return versioned_path
 
 
-def load_latest_snapshot(source_path: str) -> dict:
+def load_latest_snapshot(source_path: str, base_dir: Path | None = None) -> dict:
     source_stem = Path(source_path).stem
-    latest_path = Path(SNAPSHOT_DIR) / f"{source_stem}_latest.json"
+    latest_path = (base_dir or Path()) / SNAPSHOT_DIR / f"{source_stem}_latest.json"
 
     if not latest_path.exists():
         raise FileNotFoundError(

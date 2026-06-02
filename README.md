@@ -161,6 +161,48 @@ The demo dataset has these intentional drift signals:
 | `spend` | null rate 1.6% → 32.5% |
 | `status` | churned share 10% → 60% |
 
+## Python API
+
+Use drift-doctor directly in notebooks, Airflow DAGs, or ML pipelines — no CLI required.
+
+```python
+from drift_doctor import snapshot, check_drift, diff_snapshots
+
+# Save a reference snapshot (written to data/.driftdoctor/)
+snapshot("data/customers.csv")
+
+# Check for drift
+result = check_drift("data/customers.csv")
+
+print(result.has_drift)          # True / False
+print(result.summary)            # {"critical": 2, "warn": 1, "total": 3}
+print(result.critical)           # list of DriftFinding objects
+print(result.findings[0].column) # "age"
+print(result.findings[0].detail) # "mean 34.3 -> 49.8  (+15.5)"
+
+# Raise in a pipeline if critical drift is found
+result.raise_on_critical()
+
+# Use a specific snapshot file
+result = check_drift("data/customers.csv",
+                     ref="data/.driftdoctor/customers_20260101T120000Z.json",
+                     skip=["customer_id"])
+
+# Compare two snapshots without raw data
+result = diff_snapshots("snap_jan.json", "snap_feb.json")
+```
+
+**`DriftResult` properties:**
+
+| Property | Type | Description |
+|---|---|---|
+| `findings` | `list[DriftFinding]` | All findings, sorted critical-first |
+| `critical` | `list[DriftFinding]` | Critical-severity findings only |
+| `warnings` | `list[DriftFinding]` | Warn-severity findings only |
+| `has_drift` | `bool` | True if any findings exist |
+| `summary` | `dict` | `{"critical": N, "warn": N, "total": N}` |
+| `raise_on_critical()` | — | Raises `RuntimeError` if critical findings exist |
+
 ## Supported formats
 
 CSV (`.csv`) and Parquet (`.parquet`, `.pq`).
