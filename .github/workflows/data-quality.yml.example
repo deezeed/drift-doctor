@@ -36,10 +36,13 @@ jobs:
         run: drift-doctor snapshot data/customers.csv
 
       # On PRs / schedule: check for drift and generate HTML report
+      # --fail-on any: fail CI even on WARN findings (stricter gate)
+      # --fail-on critical (default): fail only on critical findings
       - name: Check for drift
         run: |
           drift-doctor check data/customers.csv \
             --skip customer_id,created_at \
+            --fail-on any \
             --output-file drift-report.html
 
       - name: Upload drift report

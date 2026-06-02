@@ -63,7 +63,7 @@ Detects:
 - Numeric distribution drift via **PSI** (warn >0.10, critical >0.25)
 - Categorical distribution drift via **JS-divergence** (warn >0.10, critical >0.30)
 
-Exits with code `1` if any findings exist — suitable for CI/CD pipelines.
+Exits with code `1` when critical findings exist (default). Control this with `--fail-on`. Suitable for CI/CD pipelines.
 
 | Flag | Description |
 |---|---|
@@ -73,6 +73,7 @@ Exits with code `1` if any findings exist — suitable for CI/CD pipelines.
 | `--output-file`, `-o` | Write JSON report to file (implies `--format json`) |
 | `--notify`, `-n` | Webhook URL to POST findings — Slack or generic (sent only when findings exist) |
 | `--output-file report.html` | Write HTML report (auto-detected by `.html` extension) |
+| `--fail-on` | Exit 1 on: `critical` (default) or `any` findings |
 | `--psi-warn` / `--psi-crit` | PSI thresholds (default: 0.10 / 0.25) |
 | `--js-warn` / `--js-crit` | JS-divergence thresholds (default: 0.10 / 0.30) |
 | `--null-warn` / `--null-crit` | Null-rate delta thresholds (default: 0.05 / 0.15) |
@@ -277,4 +278,4 @@ pytest
 - [pandas](https://pandas.pydata.org/) + [pyarrow](https://arrow.apache.org/docs/python/) — data loading
 - [typer](https://typer.tiangolo.com/) — CLI
 - [rich](https://rich.readthedocs.io/) — terminal output
-- [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) — AI diagnosis (model: `claude-sonnet-4-5`)
+- [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-python) — AI diagnosis (model: `claude-sonnet-4-6`)

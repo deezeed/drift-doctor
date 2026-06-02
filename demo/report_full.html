@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drift Report — current.csv</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       background: #f5f5f5; color: #1a1a1a; font-size: 14px; }
+.wrap { max-width: 860px; margin: 32px auto; padding: 0 16px 48px; }
+h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.meta { color: #666; font-size: 13px; margin-bottom: 24px; }
+.cards { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+.card { background: #fff; border-radius: 8px; padding: 16px 20px;
+        flex: 1; min-width: 140px; border-top: 4px solid #ddd; }
+.card.crit  { border-color: #e53e3e; }
+.card.warn  { border-color: #dd6b20; }
+.card.ok    { border-color: #38a169; }
+.card.info  { border-color: #3182ce; }
+.card .val  { font-size: 28px; font-weight: 700; line-height: 1.1; }
+.card .lbl  { font-size: 12px; color: #666; margin-top: 2px; }
+.card.crit .val { color: #e53e3e; }
+.card.warn .val { color: #dd6b20; }
+.card.ok   .val { color: #38a169; }
+.card.info .val { color: #3182ce; }
+h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+table { width: 100%; border-collapse: collapse; background: #fff;
+        border-radius: 8px; overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+thead th { background: #f0f0f0; text-align: left; padding: 10px 14px;
+           font-weight: 600; font-size: 12px; text-transform: uppercase;
+           letter-spacing: .04em; color: #555; border-bottom: 1px solid #e0e0e0; }
+tbody tr:not(:last-child) td { border-bottom: 1px solid #f0f0f0; }
+tbody td { padding: 10px 14px; vertical-align: top; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px;
+         font-size: 11px; font-weight: 700; text-transform: uppercase;
+         letter-spacing: .05em; }
+.badge-critical { background: #fff5f5; color: #e53e3e; border: 1px solid #feb2b2; }
+.badge-warn     { background: #fffaf0; color: #dd6b20; border: 1px solid #fbd38d; }
+.no-findings { background: #fff; border-radius: 8px; padding: 32px;
+               text-align: center; color: #38a169; font-weight: 600;
+               box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.footer { margin-top: 32px; font-size: 12px; color: #999; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Drift Report — current.csv</h1>
+  <div class="meta">Generated 2026-06-02 10:11 UTC</div>
+  
+    <div class="cards">
+      <div class="card crit">
+        <div class="val">3</div>
+        <div class="lbl">Critical</div>
+      </div>
+      <div class="card warn">
+        <div class="val">2</div>
+        <div class="lbl">Warnings</div>
+      </div>
+      <div class="card info">
+        <div class="val">1,000</div>
+        <div class="lbl">Rows (ref: 1,000, delta: 0)</div>
+      </div>
+      <div class="card info">
+        <div class="val" style="font-size:13px;padding-top:4px">20260601T103446Z</div>
+        <div class="lbl">Snapshot date</div>
+      </div>
+    </div>
+  
+    <h2>Findings (5)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Severity</th><th>Column</th><th>Metric</th>
+          <th>Detail</th><th>Delta</th>
+        </tr>
+      </thead>
+      <tbody><tr><td><span class="badge badge-critical">critical</span></td><td><code>phone</code></td><td>column_presence</td><td>present -> missing</td><td>—</td></tr>
+<tr><td><span class="badge badge-critical">critical</span></td><td><code>age</code></td><td>psi</td><td>mean 34.3 -> 49.8  (PSI=2.969)</td><td>2.9687</td></tr>
+<tr><td><span class="badge badge-critical">critical</span></td><td><code>spend</code></td><td>null_pct</td><td>1.6% -> 32.5%  (+30.9%)</td><td>0.309</td></tr>
+<tr><td><span class="badge badge-warn">warn</span></td><td><code>email</code></td><td>column_presence</td><td>new column</td><td>—</td></tr>
+<tr><td><span class="badge badge-warn">warn</span></td><td><code>status</code></td><td>js_divergence</td><td>JS=0.155</td><td>0.1546</td></tr>
+</tbody>
+    </table>
+  <div class="footer">drift-doctor</div>
+</div>
+</body>
+</html>

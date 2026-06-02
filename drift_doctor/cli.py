@@ -14,6 +14,11 @@ class OutputFormat(str, Enum):
     table = "table"
     json = "json"
 
+
+class FailOn(str, Enum):
+    critical = "critical"
+    any = "any"
+
 from .detector import detect_drift, diff_profiles
 from .profiler import profile_dataframe
 from .reporter import console as rich_console
@@ -82,6 +87,7 @@ def check(
     null_warn: float = typer.Option(0.05, "--null-warn", help="Null-rate delta warn threshold"),
     null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
     notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
+    fail_on: FailOn = typer.Option(FailOn.critical, "--fail-on", help="Exit 1 on: 'critical' (default) or 'any' findings"),
 ) -> None:
     """Compare current dataset against the latest snapshot and report drift."""
     try:
@@ -160,6 +166,8 @@ def check(
         except Exception as exc:
             err.print(f"Notification failed: {exc}")
 
+    if fail_on == FailOn.critical:
+        raise typer.Exit(1 if any(f.severity.value == "critical" for f in findings) else 0)
     raise typer.Exit(1 if findings else 0)
 
 
@@ -231,6 +239,7 @@ def diff(
         OutputFormat.table, "--format", "-f",
         help="Output format: table or json",
     ),
+    fail_on: FailOn = typer.Option(FailOn.critical, "--fail-on", help="Exit 1 on: 'critical' (default) or 'any' findings"),
 ) -> None:
     """Compare two snapshots directly — no raw data needed."""
     try:
@@ -272,6 +281,8 @@ def diff(
             snapshot_date="",
         )
 
+    if fail_on == FailOn.critical:
+        raise typer.Exit(1 if any(f.severity.value == "critical" for f in findings) else 0)
     raise typer.Exit(1 if findings else 0)
 
 
