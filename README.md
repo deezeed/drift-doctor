@@ -73,6 +73,7 @@ Exits with code `1` when critical findings exist (default). Control this with `-
 | `--output-file`, `-o` | Write JSON report to file (implies `--format json`) |
 | `--notify`, `-n` | Webhook URL to POST findings — Slack or generic (sent only when findings exist) |
 | `--output-file report.html` | Write HTML report (auto-detected by `.html` extension) |
+| `--since` | Use snapshot closest to this age: `7d`, `24h`, `30m` |
 | `--fail-on` | Exit 1 on: `critical` (default) or `any` findings |
 | `--psi-warn` / `--psi-crit` | PSI thresholds (default: 0.10 / 0.25) |
 | `--js-warn` / `--js-crit` | JS-divergence thresholds (default: 0.10 / 0.30) |

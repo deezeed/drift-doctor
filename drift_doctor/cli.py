@@ -23,7 +23,7 @@ from .detector import detect_drift, diff_profiles
 from .profiler import profile_dataframe
 from .reporter import console as rich_console
 from .reporter import render_drift_report, render_snapshot_summary
-from .snapshot import NoSnapshotError, load_latest_snapshot, save_snapshot
+from .snapshot import NoSnapshotError, load_latest_snapshot, load_snapshot_since, save_snapshot
 
 app = typer.Typer(
     name="drift-doctor",
@@ -34,6 +34,38 @@ app = typer.Typer(
 err = Console(stderr=True, style="bold red", legacy_windows=False)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        from . import __version__
+        rich_console.print(f"drift-doctor {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _app_callback(
+    version: bool = typer.Option(
+        False, "--version", "-V",
+        callback=_version_callback, is_eager=True,
+        help="Show version and exit",
+    ),
+) -> None:
+    pass
+
+
+def _parse_since(s: str) -> int:
+    """Parse '7d', '24h', '30m', '60s' -> seconds."""
+    s = s.strip().lower()
+    if s.endswith("d"):
+        return int(s[:-1]) * 86400
+    if s.endswith("h"):
+        return int(s[:-1]) * 3600
+    if s.endswith("m"):
+        return int(s[:-1]) * 60
+    if s.endswith("s"):
+        return int(s[:-1])
+    raise ValueError(f"Invalid duration '{s}'. Use e.g. 7d, 24h, 30m")
+
+
 def _no_snapshot_exit(source_path: str) -> None:
     name = Path(source_path).name
     rich_console.print(f"\n[red]No snapshot found for[/red] [bold]{name}[/bold]")
@@ -41,12 +73,14 @@ def _no_snapshot_exit(source_path: str) -> None:
     raise typer.Exit(1)
 
 
-def _load_snapshot(data_path: str, ref_override: str) -> dict:
+def _load_snapshot(data_path: str, ref_override: str, since: str = "") -> dict:
     if ref_override:
         p = Path(ref_override)
         if not p.exists():
             raise FileNotFoundError(f"Snapshot not found: {ref_override}")
         return json.loads(p.read_text(encoding="utf-8"))
+    if since:
+        return load_snapshot_since(data_path, _parse_since(since))
     return load_latest_snapshot(data_path)
 
 
@@ -84,6 +118,7 @@ def snapshot(
 def check(
     path: str = typer.Argument(..., help="Path to current dataset to check for drift"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
+    since: str = typer.Option("", "--since", help="Use snapshot closest to this age: 7d, 24h, 30m"),
     skip: str = typer.Option("", "--skip", "-s", help="Comma-separated columns to exclude (e.g. id,created_at)"),
     format: OutputFormat = typer.Option(OutputFormat.table, "--format", "-f", help="Output format: table or json"),
     output_file: str = typer.Option("", "--output-file", "-o", help="Write JSON report to this file (implies --format json)"),
@@ -98,7 +133,7 @@ def check(
 ) -> None:
     """Compare current dataset against the latest snapshot and report drift."""
     try:
-        snap = _load_snapshot(path, ref)
+        snap = _load_snapshot(path, ref, since)
     except NoSnapshotError:
         _no_snapshot_exit(path)
     except FileNotFoundError as exc:
@@ -184,6 +219,7 @@ def check(
 def diagnose(
     path: str = typer.Argument(..., help="Path to current dataset to diagnose"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
+    since: str = typer.Option("", "--since", help="Use snapshot closest to this age: 7d, 24h, 30m"),
     skip: str = typer.Option("", "--skip", "-s", help="Comma-separated columns to exclude"),
     consumers: str = typer.Option("", "--consumers", "-c", help="Comma-separated downstream consumer names"),
     psi_warn: float = typer.Option(0.1, "--psi-warn", help="PSI warn threshold"),
@@ -198,7 +234,7 @@ def diagnose(
     from .diagnose import run_diagnosis
 
     try:
-        snap = _load_snapshot(path, ref)
+        snap = _load_snapshot(path, ref, since)
     except NoSnapshotError:
         _no_snapshot_exit(path)
     except FileNotFoundError as exc:
@@ -373,7 +409,6 @@ def watch(
                     except Exception as exc:
                         err.print(f"Notification failed: {exc}")
             else:
-                crit = sum(1 for f in findings if f.severity.value == "critical")
                 rich_console.print(f"  [green]No drift detected.[/green]")
 
             next_ts = datetime.now(timezone.utc).fromtimestamp(

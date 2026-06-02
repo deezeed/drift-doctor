@@ -115,6 +115,61 @@ class TestFailOn:
         assert result.exit_code == 0
 
 
+class TestVersion:
+    def test_version_flag_exits_0(self):
+        result = runner.invoke(app, ["--version"])
+        assert result.exit_code == 0
+
+    def test_version_flag_shows_version(self):
+        from drift_doctor import __version__
+        result = runner.invoke(app, ["--version"])
+        assert __version__ in result.output
+
+    def test_short_version_flag(self):
+        result = runner.invoke(app, ["-V"])
+        assert result.exit_code == 0
+
+
+class TestSince:
+    def test_since_finds_closest_snapshot(self, tmp_path, monkeypatch):
+        import json as _json
+        from datetime import datetime, timedelta, timezone
+        from drift_doctor.profiler import profile_dataframe
+        from drift_doctor.snapshot import SNAPSHOT_DIR
+
+        monkeypatch.chdir(tmp_path)
+
+        df = pd.DataFrame({"age": [25, 30, 35, 40, 45]})
+        profile = profile_dataframe(df)
+        snap_dir = tmp_path / SNAPSHOT_DIR
+        snap_dir.mkdir()
+
+        now = datetime.now(timezone.utc)
+        ts_old = (now - timedelta(days=7)).strftime("%Y%m%dT%H%M%SZ")
+        (snap_dir / f"mydata_{ts_old}.json").write_text(
+            _json.dumps({"created_at": ts_old, "profile": profile}), encoding="utf-8"
+        )
+        ts_new = now.strftime("%Y%m%dT%H%M%SZ")
+        (snap_dir / f"mydata_{ts_new}.json").write_text(
+            _json.dumps({"created_at": ts_new, "profile": profile}), encoding="utf-8"
+        )
+        (snap_dir / "mydata_latest.json").write_text(
+            _json.dumps({"created_at": ts_new, "profile": profile}), encoding="utf-8"
+        )
+
+        csv_path = tmp_path / "mydata.csv"
+        df.to_csv(csv_path, index=False)
+
+        result = runner.invoke(app, ["check", str(csv_path), "--since", "7d"])
+        assert result.exit_code == 0
+
+    def test_since_invalid_duration_exits_nonzero(self, tmp_path):
+        csv_path = tmp_path / "mydata.csv"
+        pd.DataFrame({"x": [1]}).to_csv(csv_path, index=False)
+        result = runner.invoke(app, ["check", str(csv_path), "--since", "bad"])
+        assert result.exit_code != 0
+
+
 class TestOnboarding:
     def test_no_snapshot_shows_hint(self, tmp_path):
         """When no snapshot exists, output should contain the snapshot command hint."""
