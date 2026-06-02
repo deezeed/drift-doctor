@@ -1,4 +1,4 @@
-"""Generate an animated GIF showing drift-doctor watch in action."""
+"""Generate an animated GIF showing the drift-doctor workflow."""
 from pathlib import Path
 from PIL import Image
 import io
@@ -34,15 +34,16 @@ body {
 .body {
     background: #1e1e2e;
     padding: 16px 20px 20px;
-    min-height: 260px;
+    min-height: 280px;
 }
 .prompt { color: #89b4fa; }
 .cmd    { color: #cdd6f4; }
 .dim    { color: #585b70; }
 .crit   { color: #f38ba8; font-weight: bold; }
 .warn   { color: #fab387; font-weight: bold; }
-.green  { color: #a6e3a1; }
+.ok     { color: #a6e3a1; }
 .blue   { color: #89b4fa; }
+.cyan   { color: #89dceb; }
 .white  { color: #cdd6f4; }
 .bold   { font-weight: bold; }
 .sep    { color: #45475a; }
@@ -65,78 +66,74 @@ def terminal_html(lines: list[str]) -> str:
 def s(text, cls="white"):
     return f'<span class="{cls}">{text}</span>'
 
-_cmd0a = s("drift-doctor watch customers.csv \\", "cmd")
-_cmd0b = s("    --interval 1h --skip customer_id \\", "cmd")
-_cmd0c = s("    --notify https://hooks.slack.com/...", "cmd")
-_prompt = s("$", "prompt")
-_tilde  = s("~", "dim")
+_p  = s("$", "prompt")
+_tl = s("~", "dim")
 
 FRAMES = [
-    # Frame 0 — command prompt
+    # Frame 0 — version check
     [
-        f'{_tilde} {_prompt} {_cmd0a}',
-        f'{_cmd0b}',
-        f'{_cmd0c}',
+        f'{_tl} {_p} {s("drift-doctor --version", "cmd")}',
+        f'{s("drift-doctor 0.10.2", "cyan")}',
+        f"",
+        f'{_tl} {_p} {s("drift-doctor check customers.csv --skip customer_id", "cmd")}',
         f'<span class="dim">&#9608;</span>',
     ],
-    # Frame 1 — starting
+    # Frame 1 — onboarding hint (no snapshot yet)
     [
-        f'{s("~", "dim")} {s("$", "prompt")} {s("drift-doctor watch customers.csv --interval 1h --skip customer_id --notify ...", "cmd")}',
+        f'{_tl} {_p} {s("drift-doctor check customers.csv --skip customer_id", "cmd")}',
         f"",
-        f'{s("Watching", "bold")} {s("customers.csv", "blue")}  {s("every 1h", "dim")}  {s("—  Ctrl+C to stop", "dim")}',
+        f'{s("No snapshot found for", "white")} {s("customers.csv", "bold")}',
+        f'  {s("Create one first:", "dim")} {s("drift-doctor snapshot customers.csv", "cyan")}',
         f"",
-        f'{s("[09:00:00]", "dim")} {s("Checking...", "white")}',
+        f'{_tl} {_p} {s("drift-doctor snapshot customers.csv", "cmd")}',
+        f'<span class="dim">&#9608;</span>',
     ],
-    # Frame 2 — findings
+    # Frame 2 — snapshot taken, then check
     [
-        f'{s("~", "dim")} {s("$", "prompt")} {s("drift-doctor watch customers.csv --interval 1h --skip customer_id --notify ...", "cmd")}',
+        f'{_tl} {_p} {s("drift-doctor snapshot customers.csv", "cmd")}',
+        f'{s("Snapshot written: .driftdoctor/customers_20260602T160000Z.json", "dim")}',
         f"",
-        f'{s("Watching", "bold")} {s("customers.csv", "blue")}  {s("every 1h", "dim")}  {s("—  Ctrl+C to stop", "dim")}',
+        f'{_tl} {_p} {s("drift-doctor check customers.csv --skip customer_id", "cmd")}',
         f"",
-        f'{s("[09:00:00]", "dim")} {s("Checking...", "white")}',
-        f"",
-        f'{s("Row count: 1,000 -> 1,000 (+0, +0.0%)  (snapshot: 20260601T140029Z)", "dim")}',
+        f'{s("Row count: 1,000 -> 1,000 (+0, +0.0%)  (snapshot: 20260602T160000Z)", "dim")}',
         f'{s("      Drift Findings  (3 issues)      ", "bold")}',
         f"",
         f'{s("  Sev    Column   Metric       Detail", "dim")}',
         f'{s(" ──────────────────────────────────────────────────────", "sep")}',
         f'  {s("CRIT", "crit")}   {s("phone", "white")}    {s("schema", "dim")}       {s("present -> missing", "white")}',
-        f'  {s("CRIT", "crit")}   {s("age", "white")}      {s("mean_shift", "dim")}   {s("mean 34.3 -> 49.8  (+15.5)", "white")}',
-        f'  {s("CRIT", "crit")}   {s("spend", "white")}    {s("null%", "dim")}        {s("1.6% -> 32.5%  (+30.9%)", "white")}',
+        f'  {s("CRIT", "crit")}   {s("age", "white")}      {s("null%", "dim")}        {s("1.6% -> 32.5%  (+30.9%)", "white")}',
+        f'  {s("CRIT", "crit")}   {s("spend", "white")}    {s("PSI", "dim")}          {s("PSI=0.42  (crit >0.25)", "white")}',
         f"",
         f'  {s("3 critical", "crit")}',
     ],
-    # Frame 3 — notification sent
+    # Frame 3 — snapshots list
     [
-        f'{s("~", "dim")} {s("$", "prompt")} {s("drift-doctor watch customers.csv --interval 1h --skip customer_id --notify ...", "cmd")}',
+        f'{_tl} {_p} {s("drift-doctor snapshots customers.csv", "cmd")}',
         f"",
-        f'{s("Watching", "bold")} {s("customers.csv", "blue")}  {s("every 1h", "dim")}  {s("—  Ctrl+C to stop", "dim")}',
+        f'{s("Snapshots for", "bold")} {s("customers", "cyan")}  {s("(.driftdoctor)", "dim")}',
+        f'  {s("File", "dim")}                                    {s("Created (UTC)", "dim")}          {s("Size", "dim")}',
+        f'  {s("customers_20260602T160000Z.json", "cyan")}    {s("2026-06-02 16:00:00", "white")}    {s("12 KB", "dim")}',
+        f'  {s("customers_20260601T090000Z.json", "cyan")}    {s("2026-06-01 09:00:00", "white")}    {s("11 KB", "dim")}',
         f"",
-        f'{s("[09:00:00]", "dim")} {s("Checking...", "white")}',
-        f"",
-        f'  {s("3 critical", "crit")}',
-        f'  {s("Notification sent.", "dim")}',
-        f'  {s("Next check at 10:00:00 UTC", "dim")}',
-        f"",
-        f'{s("[10:00:00]", "dim")} {s("Checking...", "white")}',
+        f'  {s("2 snapshot(s).  Use --ref or --since to select one.", "dim")}',
     ],
-    # Frame 4 — clean check
+    # Frame 4 — watch clean check
     [
-        f'{s("~", "dim")} {s("$", "prompt")} {s("drift-doctor watch customers.csv --interval 1h --skip customer_id --notify ...", "cmd")}',
+        f'{_tl} {_p} {s("drift-doctor watch customers.csv --interval 1h --fail-on any", "cmd")}',
         f"",
         f'{s("Watching", "bold")} {s("customers.csv", "blue")}  {s("every 1h", "dim")}  {s("—  Ctrl+C to stop", "dim")}',
         f"",
-        f'{s("[09:00:00]", "dim")} {s("Checking...", "white")}',
+        f'{s("[16:00:00]", "dim")} {s("Checking...", "white")}',
         f'  {s("3 critical", "crit")}  {s("Notification sent.", "dim")}',
-        f'  {s("Next check at 10:00:00 UTC", "dim")}',
+        f'  {s("Next check at 17:00:00 UTC", "dim")}',
         f"",
-        f'{s("[10:00:00]", "dim")} {s("Checking...", "white")}',
-        f'  {s("No drift detected.", "green")}',
-        f'  {s("Next check at 11:00:00 UTC", "dim")}',
+        f'{s("[17:00:00]", "dim")} {s("Checking...", "white")}',
+        f'  {s("No drift detected.", "ok")}',
+        f'  {s("Next check at 18:00:00 UTC", "dim")}',
     ],
 ]
 
-DELAYS = [120, 80, 120, 100, 180]  # centiseconds per frame
+DELAYS = [140, 200, 220, 200, 200]  # centiseconds per frame
 
 def make_gif():
     out = Path(__file__).parent / "watch_demo.gif"
@@ -145,8 +142,8 @@ def make_gif():
     images = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 760, "height": 340})
-        for i, lines in enumerate(FRAMES):
+        page = browser.new_page(viewport={"width": 760, "height": 380})
+        for lines in FRAMES:
             html = terminal_html(lines)
             tmp.write_text(html, encoding="utf-8")
             page.goto(tmp.as_uri())
