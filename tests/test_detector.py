@@ -5,6 +5,7 @@ import pytest
 from drift_doctor.detector import (
     DriftFinding,
     Severity,
+    compute_drift_score,
     compute_js_divergence,
     compute_psi,
     detect_drift,
@@ -170,3 +171,35 @@ def test_findings_sorted_critical_first():
     order = {Severity.CRITICAL: 0, Severity.WARN: 1, Severity.OK: 2}
     severities = [order[f.severity] for f in findings]
     assert severities == sorted(severities)
+
+
+# -- compute_drift_score -------------------------------------------------
+
+def _make_finding(sev: Severity) -> DriftFinding:
+    return DriftFinding(
+        column="x", metric="psi", severity=sev,
+        reference_value=None, current_value=None,
+        delta=None, description="",
+    )
+
+
+def test_score_no_findings():
+    assert compute_drift_score([]) == 100
+
+
+def test_score_one_critical():
+    assert compute_drift_score([_make_finding(Severity.CRITICAL)]) == 80
+
+
+def test_score_one_warn():
+    assert compute_drift_score([_make_finding(Severity.WARN)]) == 95
+
+
+def test_score_mixed():
+    findings = [_make_finding(Severity.CRITICAL)] * 2 + [_make_finding(Severity.WARN)] * 3
+    assert compute_drift_score(findings) == max(0, 100 - 2 * 20 - 3 * 5)
+
+
+def test_score_clamped_to_zero():
+    findings = [_make_finding(Severity.CRITICAL)] * 10
+    assert compute_drift_score(findings) == 0

@@ -1,0 +1,15 @@
+# drift-doctor project config
+# Copy to .driftdoctor.toml and customize. CLI flags override these values.
+
+[thresholds]
+psi_warn  = 0.1   # PSI warn threshold for numeric columns
+psi_crit  = 0.25  # PSI critical threshold
+js_warn   = 0.1   # JS-divergence warn threshold for categorical columns
+js_crit   = 0.3   # JS-divergence critical threshold
+null_warn = 0.05  # Null-rate delta warn threshold (5%)
+null_crit = 0.15  # Null-rate delta critical threshold (15%)
+
+[defaults]
+skip    = "id,created_at,updated_at"   # always exclude these columns
+notify  = ""                           # Slack/webhook URL for alerts
+fail_on = "critical"                   # exit 1 on: "critical" or "any"

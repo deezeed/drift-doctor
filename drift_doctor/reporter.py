@@ -41,11 +41,20 @@ def render_snapshot_summary(profile: dict, path: str) -> None:
     console.print(table)
 
 
+def _score_color(score: int) -> str:
+    if score >= 90:
+        return "green"
+    if score >= 70:
+        return "yellow"
+    return "red"
+
+
 def render_drift_report(
     findings: list[DriftFinding],
     ref_row_count: int,
     cur_row_count: int,
     snapshot_date: str = "",
+    score: int | None = None,
 ) -> None:
     row_delta = cur_row_count - ref_row_count
     row_pct = row_delta / ref_row_count * 100 if ref_row_count else 0
@@ -58,7 +67,14 @@ def render_drift_report(
     )
 
     if not findings:
-        console.print("\n[bold green]No drift detected.[/bold green] All columns within normal ranges.\n")
+        score_str = (
+            f"  Drift score: [bold green]{score}/100[/bold green]\n"
+            if score is not None else ""
+        )
+        console.print(
+            f"\n[bold green]No drift detected.[/bold green] All columns within normal ranges.\n"
+            + score_str
+        )
         return
 
     table = Table(
@@ -92,5 +108,8 @@ def render_drift_report(
         parts.append(f"[bold red]{n_crit} critical[/bold red]")
     if n_warn:
         parts.append(f"[bold yellow]{n_warn} warning{'s' if n_warn != 1 else ''}[/bold yellow]")
+    if score is not None:
+        c = _score_color(score)
+        parts.append(f"Drift score: [{c}]{score}/100[/{c}]")
     if parts:
         console.print(Panel("  ".join(parts), title="Summary", expand=False))

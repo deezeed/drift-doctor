@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .detector import DriftFinding, Severity, detect_drift, diff_profiles
+from .detector import DriftFinding, Severity, compute_drift_score, detect_drift, diff_profiles
 from .profiler import profile_dataframe
 from .snapshot import load_latest_snapshot, save_snapshot
 
@@ -42,6 +42,11 @@ class DriftResult:
     @property
     def warnings(self) -> list[DriftFinding]:
         return [f for f in self.findings if f.severity == Severity.WARN]
+
+    @property
+    def score(self) -> int:
+        """Data health score 0-100. 100 = no drift, each critical -20, each warn -5."""
+        return compute_drift_score(self.findings)
 
     @property
     def has_drift(self) -> bool:

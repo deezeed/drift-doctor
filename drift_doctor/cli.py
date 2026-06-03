@@ -5,6 +5,7 @@ import sys
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 import typer
@@ -20,7 +21,8 @@ class FailOn(str, Enum):
     critical = "critical"
     any = "any"
 
-from .detector import detect_drift, diff_profiles
+from .config import load_config
+from .detector import compute_drift_score, detect_drift, diff_profiles
 from .profiler import profile_dataframe
 from .reporter import console as rich_console
 from .reporter import render_drift_report, render_snapshot_summary
@@ -214,20 +216,31 @@ def check(
     path: str = typer.Argument(..., help="Path to current dataset to check for drift"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
     since: str = typer.Option("", "--since", help="Use snapshot closest to this age: 7d, 24h, 30m"),
-    skip: str = typer.Option("", "--skip", "-s", help="Comma-separated columns to exclude (e.g. id,created_at)"),
+    skip: Optional[str] = typer.Option(None, "--skip", "-s", help="Comma-separated columns to exclude (e.g. id,created_at)"),
     format: OutputFormat = typer.Option(OutputFormat.table, "--format", "-f", help="Output format: table or json"),
-    output_file: str = typer.Option("", "--output-file", "-o", help="Write JSON report to this file (implies --format json)"),
-    psi_warn: float = typer.Option(0.1, "--psi-warn", help="PSI warn threshold"),
-    psi_crit: float = typer.Option(0.25, "--psi-crit", help="PSI critical threshold"),
-    js_warn: float = typer.Option(0.1, "--js-warn", help="JS-divergence warn threshold"),
-    js_crit: float = typer.Option(0.3, "--js-crit", help="JS-divergence critical threshold"),
-    null_warn: float = typer.Option(0.05, "--null-warn", help="Null-rate delta warn threshold"),
-    null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
-    notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
-    fail_on: FailOn = typer.Option(FailOn.critical, "--fail-on", help="Exit 1 on: 'critical' (default) or 'any' findings"),
+    output_file: str = typer.Option("", "--output-file", "-o", help="Write JSON/HTML report to this file"),
+    psi_warn: Optional[float] = typer.Option(None, "--psi-warn", help="PSI warn threshold (default: 0.1)"),
+    psi_crit: Optional[float] = typer.Option(None, "--psi-crit", help="PSI critical threshold (default: 0.25)"),
+    js_warn: Optional[float] = typer.Option(None, "--js-warn", help="JS-divergence warn threshold (default: 0.1)"),
+    js_crit: Optional[float] = typer.Option(None, "--js-crit", help="JS-divergence critical threshold (default: 0.3)"),
+    null_warn: Optional[float] = typer.Option(None, "--null-warn", help="Null-rate delta warn threshold (default: 0.05)"),
+    null_crit: Optional[float] = typer.Option(None, "--null-crit", help="Null-rate delta critical threshold (default: 0.15)"),
+    notify: Optional[str] = typer.Option(None, "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
+    fail_on: Optional[str] = typer.Option(None, "--fail-on", help="Exit 1 on: 'critical' (default) or 'any' findings"),
     quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress all output; use exit code only"),
 ) -> None:
     """Compare current dataset against the latest snapshot and report drift."""
+    cfg = load_config()
+    _psi_warn = psi_warn if psi_warn is not None else cfg["psi_warn"]
+    _psi_crit = psi_crit if psi_crit is not None else cfg["psi_crit"]
+    _js_warn = js_warn if js_warn is not None else cfg["js_warn"]
+    _js_crit = js_crit if js_crit is not None else cfg["js_crit"]
+    _null_warn = null_warn if null_warn is not None else cfg["null_warn"]
+    _null_crit = null_crit if null_crit is not None else cfg["null_crit"]
+    _skip = skip if skip is not None else cfg["skip"]
+    _notify = notify if notify is not None else cfg["notify"]
+    _fail_on = FailOn(fail_on) if fail_on is not None else FailOn(cfg["fail_on"])
+
     try:
         snap = _load_snapshot(path, ref, since)
     except NoSnapshotError:
@@ -239,11 +252,12 @@ def check(
     df = _load(path)
     findings = detect_drift(
         snap["profile"], df,
-        skip_columns=_parse_skip(skip),
-        psi_warn=psi_warn, psi_crit=psi_crit,
-        js_warn=js_warn, js_crit=js_crit,
-        null_warn=null_warn, null_crit=null_crit,
+        skip_columns=_parse_skip(_skip),
+        psi_warn=_psi_warn, psi_crit=_psi_crit,
+        js_warn=_js_warn, js_crit=_js_crit,
+        null_warn=_null_warn, null_crit=_null_crit,
     )
+    score = compute_drift_score(findings)
 
     use_html = output_file and Path(output_file).suffix.lower() == ".html"
     use_json = not use_html and (format == OutputFormat.json or bool(output_file))
@@ -263,10 +277,11 @@ def check(
         if not quiet:
             rich_console.print(f"[dim]Report written: {output_file}[/dim]")
             render_drift_report(findings, ref_rows, cur_rows,
-                                snapshot_date=snap.get("created_at", ""))
+                                snapshot_date=snap.get("created_at", ""), score=score)
     elif use_json:
         report = {
             "snapshot_date": snap.get("created_at", ""),
+            "score": score,
             "row_count": {"reference": ref_rows, "current": cur_rows, "delta": cur_rows - ref_rows},
             "summary": {
                 "critical": sum(1 for f in findings if f.severity.value == "critical"),
@@ -288,10 +303,10 @@ def check(
             sys.stdout.write(report_str)
     elif not quiet:
         render_drift_report(findings, ref_rows, cur_rows,
-                            snapshot_date=snap.get("created_at", ""))
+                            snapshot_date=snap.get("created_at", ""), score=score)
 
-    if notify and findings:
-        from .notifier import notify as _notify
+    if _notify and findings:
+        from .notifier import notify as _notify_fn
         from .api import DriftResult
         result = DriftResult(
             findings=findings,
@@ -299,13 +314,13 @@ def check(
             cur_row_count=len(df),
         )
         try:
-            _notify(result, notify, source=path)
+            _notify_fn(result, _notify, source=path)
             if not quiet:
-                rich_console.print(f"[dim]Notification sent to {notify}[/dim]")
+                rich_console.print(f"[dim]Notification sent to {_notify}[/dim]")
         except Exception as exc:
             err.print(f"Notification failed: {exc}")
 
-    if fail_on == FailOn.critical:
+    if _fail_on == FailOn.critical:
         raise typer.Exit(1 if any(f.severity.value == "critical" for f in findings) else 0)
     raise typer.Exit(1 if findings else 0)
 
@@ -315,19 +330,29 @@ def diagnose(
     path: str = typer.Argument(..., help="Path to current dataset to diagnose"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
     since: str = typer.Option("", "--since", help="Use snapshot closest to this age: 7d, 24h, 30m"),
-    skip: str = typer.Option("", "--skip", "-s", help="Comma-separated columns to exclude"),
+    skip: Optional[str] = typer.Option(None, "--skip", "-s", help="Comma-separated columns to exclude"),
     consumers: str = typer.Option("", "--consumers", "-c", help="Comma-separated downstream consumer names"),
-    psi_warn: float = typer.Option(0.1, "--psi-warn", help="PSI warn threshold"),
-    psi_crit: float = typer.Option(0.25, "--psi-crit", help="PSI critical threshold"),
-    js_warn: float = typer.Option(0.1, "--js-warn", help="JS-divergence warn threshold"),
-    js_crit: float = typer.Option(0.3, "--js-crit", help="JS-divergence critical threshold"),
-    null_warn: float = typer.Option(0.05, "--null-warn", help="Null-rate delta warn threshold"),
-    null_crit: float = typer.Option(0.15, "--null-crit", help="Null-rate delta critical threshold"),
-    notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
+    psi_warn: Optional[float] = typer.Option(None, "--psi-warn", help="PSI warn threshold (default: 0.1)"),
+    psi_crit: Optional[float] = typer.Option(None, "--psi-crit", help="PSI critical threshold (default: 0.25)"),
+    js_warn: Optional[float] = typer.Option(None, "--js-warn", help="JS-divergence warn threshold (default: 0.1)"),
+    js_crit: Optional[float] = typer.Option(None, "--js-crit", help="JS-divergence critical threshold (default: 0.3)"),
+    null_warn: Optional[float] = typer.Option(None, "--null-warn", help="Null-rate delta warn threshold (default: 0.05)"),
+    null_crit: Optional[float] = typer.Option(None, "--null-crit", help="Null-rate delta critical threshold (default: 0.15)"),
+    notify: Optional[str] = typer.Option(None, "--notify", "-n", help="Webhook URL to POST findings (Slack or generic)"),
     output_file: str = typer.Option("", "--output-file", "-o", help="Write diagnosis to file (.md or .txt)"),
 ) -> None:
     """Run drift check then get AI-powered root-cause diagnosis via Anthropic API."""
     from .diagnose import run_diagnosis
+
+    cfg = load_config()
+    _psi_warn = psi_warn if psi_warn is not None else cfg["psi_warn"]
+    _psi_crit = psi_crit if psi_crit is not None else cfg["psi_crit"]
+    _js_warn = js_warn if js_warn is not None else cfg["js_warn"]
+    _js_crit = js_crit if js_crit is not None else cfg["js_crit"]
+    _null_warn = null_warn if null_warn is not None else cfg["null_warn"]
+    _null_crit = null_crit if null_crit is not None else cfg["null_crit"]
+    _skip = skip if skip is not None else cfg["skip"]
+    _notify = notify if notify is not None else cfg["notify"]
 
     try:
         snap = _load_snapshot(path, ref, since)
@@ -340,29 +365,31 @@ def diagnose(
     df = _load(path)
     findings = detect_drift(
         snap["profile"], df,
-        skip_columns=_parse_skip(skip),
-        psi_warn=psi_warn, psi_crit=psi_crit,
-        js_warn=js_warn, js_crit=js_crit,
-        null_warn=null_warn, null_crit=null_crit,
+        skip_columns=_parse_skip(_skip),
+        psi_warn=_psi_warn, psi_crit=_psi_crit,
+        js_warn=_js_warn, js_crit=_js_crit,
+        null_warn=_null_warn, null_crit=_null_crit,
     )
+    score = compute_drift_score(findings)
     render_drift_report(
         findings,
         snap["profile"]["row_count"],
         len(df),
         snapshot_date=snap.get("created_at", ""),
+        score=score,
     )
 
     if not findings:
         rich_console.print("\n[dim]No drift found — skipping AI diagnosis.[/dim]\n")
         return
 
-    if notify:
-        from .notifier import notify as _notify
+    if _notify:
+        from .notifier import notify as _notify_fn
         from .api import DriftResult
         result = DriftResult(findings=findings, ref_row_count=snap["profile"]["row_count"], cur_row_count=len(df))
         try:
-            _notify(result, notify, source=path)
-            rich_console.print(f"[dim]Notification sent to {notify}[/dim]")
+            _notify_fn(result, _notify, source=path)
+            rich_console.print(f"[dim]Notification sent to {_notify}[/dim]")
         except Exception as exc:
             err.print(f"Notification failed: {exc}")
 
@@ -374,13 +401,28 @@ def diagnose(
         n_crit = sum(1 for f in findings if f.severity.value == "critical")
         n_warn = sum(1 for f in findings if f.severity.value == "warn")
         header = (
-            f"# Drift Diagnosis — {Path(path).name}\n\n"
+            f"# Drift Diagnosis -- {Path(path).name}\n\n"
             f"- **Snapshot:** {snap_date}\n"
+            f"- **Score:** {score}/100\n"
             f"- **Findings:** {n_crit} critical, {n_warn} warn\n\n"
             f"---\n\n"
         )
         Path(output_file).write_text(header + diagnosis + "\n", encoding="utf-8")
         rich_console.print(f"[dim]Diagnosis written: {output_file}[/dim]")
+
+
+@app.command()
+def promote(
+    path: str = typer.Argument(..., help="Path to current dataset to promote as new baseline"),
+) -> None:
+    """Save the current dataset as the new reference snapshot, replacing the baseline."""
+    df = _load(path)
+    profile = profile_dataframe(df)
+    saved = save_snapshot(profile, path)
+    rich_console.print(f"\n[bold green]Promoted[/bold green] [cyan]{Path(path).name}[/cyan] as new baseline")
+    rich_console.print(f"  Rows     : [white]{profile['row_count']:,}[/white]")
+    rich_console.print(f"  Columns  : [white]{profile['column_count']}[/white]")
+    rich_console.print(f"  Snapshot : [dim]{saved}[/dim]\n")
 
 
 @app.command()
@@ -459,18 +501,28 @@ def watch(
     path: str = typer.Argument(..., help="Path to dataset to monitor"),
     interval: str = typer.Option("1h", "--interval", "-i", help="Check interval: 30s, 5m, 1h"),
     ref: str = typer.Option("", "--ref", "-r", help="Path to a specific snapshot JSON"),
-    skip: str = typer.Option("", "--skip", "-s", help="Comma-separated columns to exclude"),
-    notify: str = typer.Option("", "--notify", "-n", help="Webhook URL to POST findings"),
-    psi_warn: float = typer.Option(0.1, "--psi-warn"),
-    psi_crit: float = typer.Option(0.25, "--psi-crit"),
-    js_warn: float = typer.Option(0.1, "--js-warn"),
-    js_crit: float = typer.Option(0.3, "--js-crit"),
-    null_warn: float = typer.Option(0.05, "--null-warn"),
-    null_crit: float = typer.Option(0.15, "--null-crit"),
+    skip: Optional[str] = typer.Option(None, "--skip", "-s", help="Comma-separated columns to exclude"),
+    notify: Optional[str] = typer.Option(None, "--notify", "-n", help="Webhook URL to POST findings"),
+    psi_warn: Optional[float] = typer.Option(None, "--psi-warn"),
+    psi_crit: Optional[float] = typer.Option(None, "--psi-crit"),
+    js_warn: Optional[float] = typer.Option(None, "--js-warn"),
+    js_crit: Optional[float] = typer.Option(None, "--js-crit"),
+    null_warn: Optional[float] = typer.Option(None, "--null-warn"),
+    null_crit: Optional[float] = typer.Option(None, "--null-crit"),
 ) -> None:
     """Repeatedly check a dataset for drift at a fixed interval. Press Ctrl+C to stop."""
     import time
     from datetime import datetime, timezone
+
+    cfg = load_config()
+    _psi_warn = psi_warn if psi_warn is not None else cfg["psi_warn"]
+    _psi_crit = psi_crit if psi_crit is not None else cfg["psi_crit"]
+    _js_warn = js_warn if js_warn is not None else cfg["js_warn"]
+    _js_crit = js_crit if js_crit is not None else cfg["js_crit"]
+    _null_warn = null_warn if null_warn is not None else cfg["null_warn"]
+    _null_crit = null_crit if null_crit is not None else cfg["null_crit"]
+    _skip = skip if skip is not None else cfg["skip"]
+    _notify = notify if notify is not None else cfg["notify"]
 
     try:
         interval_sec = _parse_interval(interval)
@@ -497,23 +549,24 @@ def watch(
             df = _load(path)
             findings = detect_drift(
                 snap["profile"], df,
-                skip_columns=_parse_skip(skip),
-                psi_warn=psi_warn, psi_crit=psi_crit,
-                js_warn=js_warn, js_crit=js_crit,
-                null_warn=null_warn, null_crit=null_crit,
+                skip_columns=_parse_skip(_skip),
+                psi_warn=_psi_warn, psi_crit=_psi_crit,
+                js_warn=_js_warn, js_crit=_js_crit,
+                null_warn=_null_warn, null_crit=_null_crit,
             )
+            score = compute_drift_score(findings)
 
             if findings:
                 render_drift_report(findings, snap["profile"]["row_count"], len(df),
-                                    snapshot_date=snap.get("created_at", ""))
-                if notify:
-                    from .notifier import notify as _notify
+                                    snapshot_date=snap.get("created_at", ""), score=score)
+                if _notify:
+                    from .notifier import notify as _notify_fn
                     from .api import DriftResult
                     result = DriftResult(findings=findings,
                                         ref_row_count=snap["profile"]["row_count"],
                                         cur_row_count=len(df))
                     try:
-                        _notify(result, notify, source=path)
+                        _notify_fn(result, _notify, source=path)
                         rich_console.print("[dim]Notification sent.[/dim]")
                     except Exception as exc:
                         err.print(f"Notification failed: {exc}")

@@ -214,6 +214,12 @@ def diff_profiles(
     return findings
 
 
+def compute_drift_score(findings: list[DriftFinding]) -> int:
+    """Return a 0-100 data health score. 100 = no drift, 0 = severely degraded."""
+    penalty = sum(20 if f.severity == Severity.CRITICAL else 5 for f in findings)
+    return max(0, 100 - penalty)
+
+
 def detect_drift(
     ref_profile: dict,
     current_df: pd.DataFrame,
